@@ -38,26 +38,114 @@ interface Post {
   editId: string; // 6-digit string
 }
 
-Quickstart
-Prereqs
-- Node.js 18+ (recommended)
-- pnpm (npm i -g pnpm)
+## ✨ Features
 
-Install
+- 🏔️ **Outdoorsy Theme**: Snowsport, water sport, and adventure avatars
+- 📝 **Create Posts**: Alias, avatar selection, content (max 300 chars)
+- ✏️ **Edit Posts**: 6-digit Edit ID system for secure editing
+- 🔔 **Toast Notifications**: Beautiful success/error messages with Edit ID display
+- ⚡ **Real-time Feel**: Polling + optimistic updates
+- 🎨 **Modern UI**: React + TypeScript + SCSS with responsive design
+- 🏂 **Easter Egg**: Default MexicanSnowboarder post
+- 🔒 **Type Safety**: Strict TypeScript throughout
+- 🚀 **Deployed**: Live on Vercel with serverless functions
+
+## 🚀 Quick Start
+
+### Prerequisites
+- **Node.js 18+** (recommended)
+- **pnpm** package manager: `npm install -g pnpm`
+
+### Installation
+```bash
 pnpm install
+```
 
-Development (server + client)
+### 🏃‍♂️ Running Locally
+
+**Start both server and client together:**
+```bash
 pnpm dev
+```
 
-Open:
-- Client: http://localhost:5173
-- API: http://localhost:4000
+This single command will:
+- ✅ Start the **Express server** on port 4000
+- ✅ Start the **React client** on port 5173 (or 5174 if 5173 is busy)
+- ✅ Enable **hot reload** for both frontend and backend
+- ✅ Create the **default MexicanSnowboarder post** 🏂
 
-Production build
-- Build shared types: pnpm build:shared
-- Build server: pnpm build:server
-- Start server (prod): pnpm start
-- Build client: from client/: pnpm build (serving the built assets is out of scope for this MVP)
+**Access your application:**
+- 🌐 **Frontend**: http://localhost:5173/ (or 5174)
+- 🔗 **API**: http://localhost:4000/api/posts
+- ❤️ **Health Check**: http://localhost:4000/health
+
+### 🔧 Alternative: Run Separately
+
+If you prefer to run server and client in separate terminals:
+
+**Terminal 1 - Server:**
+```bash
+pnpm dev:server
+```
+
+**Terminal 2 - Client:**
+```bash
+pnpm dev:client
+```
+
+### 🛠️ Troubleshooting
+
+**Port conflicts?**
+```bash
+# Kill existing processes
+pkill -f "ts-node-dev" || true
+pkill -f "vite" || true
+
+# Start fresh
+pnpm dev
+```
+
+**Server won't start?**
+- Check if port 4000 is already in use
+- The server will automatically restart when you make changes
+
+**Client won't start?**
+- Vite will automatically try the next available port (5174, 5175, etc.)
+- Check the terminal output for the actual port being used
+
+## 🌐 Live Demo
+
+**Production URL**: https://post-wall-troomi.vercel.app
+
+The application is deployed on Vercel with:
+- ✅ **Frontend**: React SPA with Vite
+- ✅ **Backend**: Vercel Serverless Functions
+- ✅ **Features**: Create posts, edit with 6-digit IDs, outdoorsy avatars, toast notifications
+- ✅ **Default Post**: MexicanSnowboarder with 🏂 avatar
+
+## 🏗️ Production Build
+
+**Build all packages:**
+```bash
+pnpm build
+```
+
+**Build individual packages:**
+```bash
+# Build shared types
+pnpm build:shared
+
+# Build server
+pnpm build:server
+
+# Build client
+pnpm build:client
+```
+
+**Start production server:**
+```bash
+pnpm start
+```
 
 Environment Variables
 - Root env.example files exist in server/ and client/ with sensible defaults.
