@@ -23,9 +23,6 @@ importers:
 
   packages/client:
     dependencies:
-      '@post-wall/shared':
-        specifier: workspace:*
-        version: link:../shared
       react:
         specifier: ^18.2.0
         version: 18.3.1
