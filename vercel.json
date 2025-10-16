@@ -1,14 +1,15 @@
 {
   "version": 2,
-  "buildCommand": "pnpm build:shared && pnpm build:client",
-  "outputDirectory": "packages/client/dist",
-  "installCommand": "pnpm install",
-  "framework": null,
-  "routes": [
+  "builds": [
     {
-      "src": "/api/(.*)",
-      "dest": "/packages/server/src/server.ts"
-    },
+      "src": "packages/client/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist"
+      }
+    }
+  ],
+  "routes": [
     {
       "src": "/(.*)",
       "dest": "/packages/client/dist/$1"
