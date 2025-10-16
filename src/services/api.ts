@@ -2,43 +2,29 @@ import { Post, PostFormData, ApiResponse } from '../types';
 
 // Determine API base URL based on environment
 const getApiBaseUrl = (): string => {
-  // Debug logging
-  console.log('🔧 Environment Detection:', {
-    VITE_API_URL: import.meta.env.VITE_API_URL,
-    PROD: import.meta.env.PROD,
-    MODE: import.meta.env.MODE,
-    NODE_ENV: import.meta.env.NODE_ENV,
-    location: typeof window !== 'undefined' ? window.location.hostname : 'server'
-  });
-
-  // If VITE_API_URL is explicitly set, use it
+  // If VITE_API_URL is explicitly set, use it (set in Vercel environment variables)
   if (import.meta.env.VITE_API_URL) {
-    console.log('✅ Using VITE_API_URL:', import.meta.env.VITE_API_URL);
     return import.meta.env.VITE_API_URL;
   }
   
-  // Check if we're on Vercel (production) by hostname - this is the most reliable method
+  // Check if we're on Vercel (production) by hostname
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
     if (hostname.includes('vercel.app') || hostname.includes('vercel.com')) {
-      console.log('✅ Detected Vercel deployment, using /api');
       return '/api';
     }
   }
   
   // In production mode, use relative path to API
   if (import.meta.env.PROD || import.meta.env.MODE === 'production') {
-    console.log('✅ Production mode detected, using /api');
     return '/api';
   }
   
   // In development, use localhost
-  console.log('✅ Development mode, using localhost:4000');
   return 'http://localhost:4000/api';
 };
 
 const API_BASE_URL = getApiBaseUrl();
-console.log('🚀 Final API_BASE_URL:', API_BASE_URL);
 
 // API client for post operations
 export class ApiClient {
