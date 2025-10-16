@@ -1,0 +1,180 @@
+---
+globs: *.ts,*.tsx
+description: TypeScript coding standards and strict typing requirements
+---
+
+# TypeScript Standards - Social Posting Wall
+
+## Strict TypeScript Configuration
+- **Always use strict mode** - Enable all strict flags in tsconfig.json
+- **No `any` types** - Use proper typing or `unknown` when necessary
+- **Explicit return types** - Define return types for all functions
+- **Interface over type** - Prefer interfaces for object shapes
+- **Enum usage** - Use enums for fixed sets of values
+
+## Type Definitions
+
+### Core Data Types
+```typescript
+// Post interface - matches canonical spec exactly
+interface Post {
+  id: string;
+  alias: string;
+  avatar: string; // emoji or image URL
+  content: string; // max 300 characters
+  timestamp: number; // Unix timestamp
+  editId: string; // 6-digit string
+}
+
+// API Response types
+interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+}
+
+// Form data types
+interface PostFormData {
+  alias: string;
+  avatar: string;
+  content: string;
+  editId?: string; // optional for new posts
+}
+
+// Edit operation types
+interface EditPostRequest {
+  id: string;
+  editId: string;
+  updates: Partial<Pick<Post, 'alias' | 'avatar' | 'content'>>;
+}
+```
+
+### Enum Definitions
+```typescript
+// Avatar types
+enum AvatarType {
+  EMOJI = 'emoji',
+  IMAGE = 'image'
+}
+
+// API endpoints
+enum ApiEndpoints {
+  GET_POSTS = '/posts',
+  CREATE_POST = '/posts',
+  UPDATE_POST = '/posts/:id'
+}
+
+// Error types
+enum ErrorType {
+  VALIDATION_ERROR = 'VALIDATION_ERROR',
+  NOT_FOUND = 'NOT_FOUND',
+  UNAUTHORIZED = 'UNAUTHORIZED',
+  SERVER_ERROR = 'SERVER_ERROR'
+}
+```
+
+## Type Guards and Validation
+```typescript
+// Type guards for runtime validation
+function isValidPost(obj: unknown): obj is Post {
+  return (
+    typeof obj === 'object' &&
+    obj !== null &&
+    typeof (obj as Post).id === 'string' &&
+    typeof (obj as Post).alias === 'string' &&
+    typeof (obj as Post).avatar === 'string' &&
+    typeof (obj as Post).content === 'string' &&
+    typeof (obj as Post).timestamp === 'number' &&
+    typeof (obj as Post).editId === 'string'
+  );
+}
+
+function isValidEditId(editId: string): boolean {
+  return /^\d{6}$/.test(editId);
+}
+```
+
+## Function Signatures
+```typescript
+// Always define explicit return types
+function generateEditId(): string;
+function formatTimestamp(timestamp: number): string;
+function validatePostContent(content: string): boolean;
+function createPost(data: PostFormData): Promise<Post>;
+function updatePost(id: string, editId: string, updates: Partial<Post>): Promise<Post>;
+```
+
+## Error Handling
+```typescript
+// Custom error types
+class ValidationError extends Error {
+  constructor(message: string, public field?: string) {
+    super(message);
+    this.name = 'ValidationError';
+  }
+}
+
+class UnauthorizedError extends Error {
+  constructor(message: string = 'Unauthorized access') {
+    super(message);
+    this.name = 'UnauthorizedError';
+  }
+}
+
+// Error response type
+interface ErrorResponse {
+  success: false;
+  error: string;
+  field?: string;
+}
+```
+
+## Generic Types
+```typescript
+// Generic API response wrapper
+type ApiResult<T> = 
+  | { success: true; data: T }
+  | { success: false; error: string };
+
+// Generic form state
+interface FormState<T> {
+  data: T;
+  errors: Partial<Record<keyof T, string>>;
+  isSubmitting: boolean;
+  isDirty: boolean;
+}
+```
+
+## Import/Export Standards
+```typescript
+// Use named exports for types
+export type { Post, PostFormData, EditPostRequest };
+export { AvatarType, ErrorType, ApiEndpoints };
+
+// Use default exports sparingly, prefer named exports
+export const createPost = (data: PostFormData): Promise<Post> => { /* ... */ };
+export const updatePost = (id: string, editId: string, updates: Partial<Post>): Promise<Post> => { /* ... */ };
+```
+
+## Utility Types
+```typescript
+// Extract specific fields from Post
+type PostInput = Pick<Post, 'alias' | 'avatar' | 'content'>;
+type PostUpdate = Partial<Pick<Post, 'alias' | 'avatar' | 'content'>>;
+
+// Make certain fields required
+type PostWithEditId = Post & { editId: string };
+
+// Extract ID from any object with id field
+type WithId<T> = T & { id: string };
+```
+
+## Best Practices
+1. **Always use interfaces** for object shapes
+2. **Use enums** for fixed sets of string values
+3. **Define explicit return types** for all functions
+4. **Use type guards** for runtime validation
+5. **Prefer composition** over inheritance
+6. **Use generic types** for reusable patterns
+7. **Handle errors explicitly** with custom error types
+8. **Use Zod schemas** for API validation (see validation rules)

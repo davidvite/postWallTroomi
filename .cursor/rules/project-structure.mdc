@@ -1,0 +1,88 @@
+---
+alwaysApply: true
+description: Project structure and tech stack guidelines for Social Posting Wall
+---
+
+# Social Posting Wall - Project Structure & Tech Stack
+
+## Core Architecture
+This is a **Social Posting Wall** application with the following mandatory tech stack:
+
+### Frontend (React + TypeScript + SCSS)
+- **Framework**: React (single-page app, no Next.js)
+- **Language**: TypeScript (strict mode required)
+- **Styling**: SCSS only (no Tailwind, no CSS-in-JS, no styled-components)
+- **Structure**: 
+  - `src/components/` - React components
+  - `src/styles/` - SCSS files
+  - `src/types/` - TypeScript type definitions
+  - `src/utils/` - Utility functions
+  - `src/hooks/` - Custom React hooks
+
+### Backend (Node.js + Express + TypeScript)
+- **Runtime**: Node.js
+- **Framework**: Express.js
+- **Language**: TypeScript (strict mode required)
+- **Structure**:
+  - `server/src/routes/` - API route handlers
+  - `server/src/middleware/` - Express middleware
+  - `server/src/types/` - Shared TypeScript types
+  - `server/src/services/` - Business logic
+  - `server/src/validation/` - Zod schemas
+
+### Data Persistence
+- **Primary**: Redis (or mocked equivalent using in-memory Map)
+- **Interface**: Program to an interface for easy Redis client swapping
+- **Persistence**: Data must survive page refreshes
+- **Real-time**: Lightweight polling (2-3s) + optimistic updates
+
+## Project Root Structure
+```
+postWallTroomi/
+├── .cursor/rules/          # Cursor rules (this directory)
+├── client/                 # React frontend
+│   ├── src/
+│   ├── public/
+│   ├── package.json
+│   └── tsconfig.json
+├── server/                 # Express backend
+│   ├── src/
+│   ├── package.json
+│   └── tsconfig.json
+├── shared/                 # Shared types and utilities
+│   └── types/
+└── README.md
+```
+
+## Key Constraints
+- **No Tailwind CSS** - Use SCSS for all styling
+- **No CSS-in-JS** - Traditional SCSS files only
+- **No Next.js** - Pure React single-page app
+- **TypeScript strict mode** - No `any` types allowed
+- **Redis or mock** - No traditional database
+- **Modular design** - Easy to extend and maintain
+
+## Data Model
+Posts follow this structure:
+```typescript
+interface Post {
+  id: string;
+  alias: string;
+  avatar: string; // emoji or image URL
+  content: string; // max 300 characters
+  timestamp: number;
+  editId: string; // 6-digit string
+}
+```
+
+## API Endpoints
+- `GET /posts` - Retrieve all posts
+- `POST /posts` - Create new post
+- `PATCH /posts/:id` - Update post (requires editId)
+
+## Development Principles
+- **TypeScript-first**: Strict typing everywhere
+- **Clean architecture**: Separation of concerns
+- **UX polish**: Clear feedback, error states, accessibility
+- **Maintainable**: Modular, extensible code
+- **Real-time feel**: Optimistic updates + polling

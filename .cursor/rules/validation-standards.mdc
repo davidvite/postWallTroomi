@@ -1,0 +1,464 @@
+---
+globs: server/**/*.ts,shared/**/*.ts
+description: Zod validation schemas and API validation patterns
+---
+
+# Validation Standards - Zod Schemas
+
+## Zod Schema Definitions
+
+### Core Validation Schemas
+```typescript
+// shared/validation/postSchemas.ts
+import { z } from 'zod';
+
+// Avatar validation - emoji or image URL
+const avatarSchema = z.string().min(1, 'Avatar is required').refine(
+  (val) => {
+    // Check if it's an emoji (single character) or valid URL
+    const isEmoji = /^[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]$/u.test(val);
+    const isUrl = /^https?:\/\/.+\.(jpg|jpeg|png|gif|webp)$/i.test(val);
+    return isEmoji || isUrl;
+  },
+  {
+    message: 'Avatar must be an emoji or a valid image URL (jpg, jpeg, png, gif, webp)'
+  }
+);
+
+// Edit ID validation - exactly 6 digits
+const editIdSchema = z.string().regex(
+  /^\d{6}$/,
+  'Edit ID must be exactly 6 digits'
+);
+
+// Post content validation
+const contentSchema = z.string()
+  .min(1, 'Content is required')
+  .max(300, 'Content must be 300 characters or less')
+  .trim();
+
+// Alias validation
+const aliasSchema = z.string()
+  .min(1, 'Alias is required')
+  .max(50, 'Alias must be 50 characters or less')
+  .trim()
+  .regex(
+    /^[a-zA-Z0-9\s\-_]+$/,
+    'Alias can only contain letters, numbers, spaces, hyphens, and underscores'
+  );
+
+// Post ID validation
+const postIdSchema = z.string()
+  .min(1, 'Post ID is required')
+  .regex(
+    /^[a-zA-Z0-9]+$/,
+    'Post ID must contain only alphanumeric characters'
+  );
+```
+
+### Request Validation Schemas
+```typescript
+// Create post request schema
+export const createPostSchema = z.object({
+  alias: aliasSchema,
+  avatar: avatarSchema,
+  content: contentSchema,
+  editId: editIdSchema.optional()
+});
+
+// Update post request schema
+export const updatePostSchema = z.object({
+  editId: editIdSchema,
+  updates: z.object({
+    alias: aliasSchema.optional(),
+    avatar: avatarSchema.optional(),
+    content: contentSchema.optional()
+  }).refine(
+    (data) => Object.keys(data).length > 0,
+    'At least one field must be provided for update'
+  )
+});
+
+// Post ID parameter schema
+export const postIdParamSchema = z.object({
+  id: postIdSchema
+});
+
+// Query parameter schemas
+export const getPostsQuerySchema = z.object({
+  limit: z.string().optional().transform((val) => {
+    const num = parseInt(val || '50');
+    return Math.min(Math.max(num, 1), 100); // Clamp between 1 and 100
+  }),
+  offset: z.string().optional().transform((val) => {
+    const num = parseInt(val || '0');
+    return Math.max(num, 0); // Ensure non-negative
+  })
+});
+```
+
+### Response Validation Schemas
+```typescript
+// Post response schema
+export const postResponseSchema = z.object({
+  id: z.string(),
+  alias: z.string(),
+  avatar: z.string(),
+  content: z.string(),
+  timestamp: z.number(),
+  editId: z.string()
+});
+
+// API response schemas
+export const apiResponseSchema = z.object({
+  success: z.boolean(),
+  data: z.any().optional(),
+  error: z.string().optional(),
+  field: z.string().optional()
+});
+
+// Paginated response schema
+export const paginatedResponseSchema = z.object({
+  success: z.boolean(),
+  data: z.array(postResponseSchema),
+  pagination: z.object({
+    page: z.number(),
+    limit: z.number(),
+    total: z.number(),
+    totalPages: z.number()
+  })
+});
+```
+
+## Express Middleware Integration
+
+### Validation Middleware
+```typescript
+// server/src/middleware/validation.ts
+import { Request, Response, NextFunction } from 'express';
+import { z, ZodSchema, ZodError } from 'zod';
+import { ValidationError } from '../errors/CustomErrors';
+
+// Generic validation middleware factory
+export const validate = (schema: ZodSchema, target: 'body' | 'params' | 'query' = 'body') => {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    try {
+      const data = req[target];
+      const validatedData = schema.parse(data);
+      
+      // Replace the original data with validated data
+      req[target] = validatedData;
+      
+      next();
+    } catch (error) {
+      if (error instanceof ZodError) {
+        const fieldErrors = error.errors.map(err => ({
+          field: err.path.join('.'),
+          message: err.message
+        }));
+        
+        const firstError = fieldErrors[0];
+        throw new ValidationError(
+          firstError.message,
+          firstError.field
+        );
+      }
+      
+      next(error);
+    }
+  };
+};
+
+// Specific validation middlewares
+export const validateCreatePost = validate(createPostSchema, 'body');
+export const validateUpdatePost = validate(updatePostSchema, 'body');
+export const validatePostId = validate(postIdParamSchema, 'params');
+export const validateGetPostsQuery = validate(getPostsQuerySchema, 'query');
+```
+
+### Enhanced Error Handler for Validation
+```typescript
+// server/src/middleware/errorHandler.ts
+import { Request, Response, NextFunction } from 'express';
+import { ZodError } from 'zod';
+import { ValidationError, UnauthorizedError } from '../errors/CustomErrors';
+import { ApiResponse } from '../types/ApiResponse';
+
+export const errorHandler = (
+  error: Error,
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void => {
+  console.error('Error:', error);
+
+  let statusCode = 500;
+  let message = 'Internal server error';
+  let field: string | undefined;
+
+  if (error instanceof ValidationError) {
+    statusCode = 400;
+    message = error.message;
+    field = error.field;
+  } else if (error instanceof UnauthorizedError) {
+    statusCode = 403;
+    message = error.message;
+  } else if (error instanceof ZodError) {
+    statusCode = 400;
+    const firstError = error.errors[0];
+    message = firstError.message;
+    field = firstError.path.join('.');
+  }
+
+  const response: ApiResponse<never> = {
+    success: false,
+    error: message,
+    ...(field && { field })
+  };
+
+  res.status(statusCode).json(response);
+};
+```
+
+## Frontend Validation
+
+### Client-Side Validation Hooks
+```typescript
+// client/src/hooks/useValidation.ts
+import { useState, useCallback } from 'react';
+import { z } from 'zod';
+
+export const useValidation = <T>(schema: z.ZodSchema<T>) => {
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const validate = useCallback((data: unknown): data is T => {
+    try {
+      schema.parse(data);
+      setErrors({});
+      return true;
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const fieldErrors: Record<string, string> = {};
+        error.errors.forEach(err => {
+          const field = err.path.join('.');
+          fieldErrors[field] = err.message;
+        });
+        setErrors(fieldErrors);
+      }
+      return false;
+    }
+  }, [schema]);
+
+  const validateField = useCallback((field: string, value: unknown): boolean => {
+    try {
+      const fieldSchema = schema.shape[field as keyof typeof schema.shape];
+      if (fieldSchema) {
+        fieldSchema.parse(value);
+        setErrors(prev => {
+          const newErrors = { ...prev };
+          delete newErrors[field];
+          return newErrors;
+        });
+        return true;
+      }
+      return true;
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        setErrors(prev => ({
+          ...prev,
+          [field]: error.errors[0].message
+        }));
+      }
+      return false;
+    }
+  }, [schema]);
+
+  const clearErrors = useCallback(() => {
+    setErrors({});
+  }, []);
+
+  const getFieldError = useCallback((field: string): string | undefined => {
+    return errors[field];
+  }, [errors]);
+
+  return {
+    validate,
+    validateField,
+    clearErrors,
+    getFieldError,
+    errors,
+    hasErrors: Object.keys(errors).length > 0
+  };
+};
+```
+
+### Form Validation Component
+```typescript
+// client/src/components/ValidatedForm.tsx
+import React, { useState, useCallback } from 'react';
+import { z } from 'zod';
+import { useValidation } from '../hooks/useValidation';
+
+interface ValidatedFormProps<T> {
+  schema: z.ZodSchema<T>;
+  onSubmit: (data: T) => Promise<void>;
+  children: (props: {
+    validate: (data: unknown) => data is T;
+    validateField: (field: string, value: unknown) => boolean;
+    getFieldError: (field: string) => string | undefined;
+    clearErrors: () => void;
+    hasErrors: boolean;
+  }) => React.ReactNode;
+}
+
+export const ValidatedForm = <T,>({ schema, onSubmit, children }: ValidatedFormProps<T>) => {
+  const {
+    validate,
+    validateField,
+    getFieldError,
+    clearErrors,
+    hasErrors
+  } = useValidation(schema);
+
+  const handleSubmit = useCallback(async (data: unknown) => {
+    if (validate(data)) {
+      await onSubmit(data);
+    }
+  }, [validate, onSubmit]);
+
+  return (
+    <form onSubmit={(e) => {
+      e.preventDefault();
+      const formData = new FormData(e.currentTarget);
+      const data = Object.fromEntries(formData.entries());
+      handleSubmit(data);
+    }}>
+      {children({
+        validate,
+        validateField,
+        getFieldError,
+        clearErrors,
+        hasErrors
+      })}
+    </form>
+  );
+};
+```
+
+## Custom Validation Rules
+
+### Business Logic Validation
+```typescript
+// server/src/validation/businessRules.ts
+import { z } from 'zod';
+
+// Custom validation for edit ID uniqueness
+export const uniqueEditIdSchema = z.string().refine(
+  async (editId, ctx) => {
+    // This would check against the repository
+    // Implementation depends on your repository pattern
+    const exists = await checkEditIdExists(editId);
+    if (exists) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Edit ID already exists'
+      });
+      return false;
+    }
+    return true;
+  }
+);
+
+// Content moderation validation
+export const contentModerationSchema = z.string().refine(
+  (content) => {
+    const bannedWords = ['spam', 'inappropriate']; // Add your banned words
+    const lowerContent = content.toLowerCase();
+    return !bannedWords.some(word => lowerContent.includes(word));
+  },
+  {
+    message: 'Content contains inappropriate language'
+  }
+);
+
+// Avatar validation with predefined options
+export const predefinedAvatarSchema = z.enum([
+  '😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃',
+  '😉', '😊', '😇', '🥰', '😍', '🤩', '😘', '😗', '😚', '😙',
+  '😋', '😛', '😜', '🤪', '😝', '🤑', '🤗', '🤭', '🤫', '🤔',
+  '🤐', '🤨', '😐', '😑', '😶', '😏', '😒', '🙄', '😬', '🤥'
+]);
+
+// Combined avatar schema (predefined or custom)
+export const flexibleAvatarSchema = z.union([
+  predefinedAvatarSchema,
+  z.string().regex(
+    /^https?:\/\/.+\.(jpg|jpeg|png|gif|webp)$/i,
+    'Custom avatar must be a valid image URL'
+  )
+]);
+```
+
+## Validation Utilities
+
+### Schema Composition
+```typescript
+// shared/validation/utils.ts
+import { z } from 'zod';
+
+// Create a schema that extends another schema
+export const extendSchema = <T extends z.ZodTypeAny>(
+  baseSchema: T,
+  extensions: Record<string, z.ZodTypeAny>
+) => {
+  return baseSchema.extend(extensions);
+};
+
+// Create a partial schema from a full schema
+export const createPartialSchema = <T extends z.ZodTypeAny>(
+  schema: T
+) => {
+  return schema.partial();
+};
+
+// Create a schema with optional fields
+export const createOptionalSchema = <T extends z.ZodTypeAny>(
+  schema: T,
+  optionalFields: (keyof z.infer<T>)[]
+) => {
+  const shape = schema.shape;
+  const newShape: Record<string, z.ZodTypeAny> = {};
+  
+  Object.keys(shape).forEach(key => {
+    if (optionalFields.includes(key as keyof z.infer<T>)) {
+      newShape[key] = shape[key].optional();
+    } else {
+      newShape[key] = shape[key];
+    }
+  });
+  
+  return z.object(newShape);
+};
+```
+
+## Best Practices
+
+### Validation Strategy
+- Validate on both client and server
+- Use Zod for runtime type checking
+- Implement custom business rule validation
+- Provide clear, user-friendly error messages
+- Handle validation errors gracefully
+
+### Performance
+- Cache compiled schemas
+- Use lazy validation for complex schemas
+- Implement field-level validation for real-time feedback
+- Avoid deep object validation in hot paths
+
+### Security
+- Sanitize all user input
+- Validate file uploads thoroughly
+- Implement rate limiting for validation endpoints
+- Log validation failures for monitoring
+- Use allowlists for file types and content

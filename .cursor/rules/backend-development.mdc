@@ -1,0 +1,373 @@
+---
+globs: server/**/*.ts
+description: Node.js Express backend development standards and API design patterns
+---
+
+# Backend Development - Node.js + Express + TypeScript
+
+## Express Server Structure
+
+### Main Server File
+```typescript
+// server/src/app.ts
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import { errorHandler } from './middleware/errorHandler';
+import { requestLogger } from './middleware/requestLogger';
+import postRoutes from './routes/posts';
+import { PostService } from './services/PostService';
+
+const app = express();
+
+// Middleware
+app.use(helmet());
+app.use(cors());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true }));
+app.use(requestLogger);
+
+// Routes
+app.use('/api/posts', postRoutes);
+
+// Health check
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: Date.now() });
+});
+
+// Error handling
+app.use(errorHandler);
+
+export default app;
+```
+
+### Route Handlers
+```typescript
+// server/src/routes/posts.ts
+import { Router } from 'express';
+import { PostController } from '../controllers/PostController';
+import { validateCreatePost, validateUpdatePost } from '../validation/postValidation';
+import { PostService } from '../services/PostService';
+
+const router = Router();
+const postService = new PostService();
+const postController = new PostController(postService);
+
+// GET /api/posts - Retrieve all posts
+router.get('/', postController.getAllPosts);
+
+// POST /api/posts - Create new post
+router.post('/', validateCreatePost, postController.createPost);
+
+// PATCH /api/posts/:id - Update post
+router.patch('/:id', validateUpdatePost, postController.updatePost);
+
+export default router;
+```
+
+### Controller Pattern
+```typescript
+// server/src/controllers/PostController.ts
+import { Request, Response, NextFunction } from 'express';
+import { PostService } from '../services/PostService';
+import { Post, PostFormData, EditPostRequest } from '../types/Post';
+import { ApiResponse } from '../types/ApiResponse';
+
+export class PostController {
+  constructor(private postService: PostService) {}
+
+  getAllPosts = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const posts = await this.postService.getAllPosts();
+      const response: ApiResponse<Post[]> = {
+        success: true,
+        data: posts
+      };
+      res.json(response);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  createPost = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const postData: PostFormData = req.body;
+      const post = await this.postService.createPost(postData);
+      const response: ApiResponse<Post> = {
+        success: true,
+        data: post
+      };
+      res.status(201).json(response);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  updatePost = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const { editId, ...updates } = req.body as EditPostRequest;
+      
+      const post = await this.postService.updatePost(id, editId, updates);
+      const response: ApiResponse<Post> = {
+        success: true,
+        data: post
+      };
+      res.json(response);
+    } catch (error) {
+      next(error);
+    }
+  };
+}
+```
+
+## Service Layer
+
+### Post Service
+```typescript
+// server/src/services/PostService.ts
+import { Post, PostFormData } from '../types/Post';
+import { PostRepository } from '../repositories/PostRepository';
+import { ValidationError, UnauthorizedError } from '../errors/CustomErrors';
+
+export class PostService {
+  constructor(private postRepository: PostRepository) {}
+
+  async getAllPosts(): Promise<Post[]> {
+    return await this.postRepository.findAll();
+  }
+
+  async createPost(data: PostFormData): Promise<Post> {
+    const post: Post = {
+      id: this.generatePostId(),
+      alias: data.alias.trim(),
+      avatar: data.avatar,
+      content: data.content.trim(),
+      timestamp: Date.now(),
+      editId: data.editId || this.generateEditId()
+    };
+
+    await this.postRepository.save(post);
+    return post;
+  }
+
+  async updatePost(id: string, editId: string, updates: Partial<Post>): Promise<Post> {
+    const existingPost = await this.postRepository.findById(id);
+    
+    if (!existingPost) {
+      throw new ValidationError('Post not found');
+    }
+
+    if (existingPost.editId !== editId) {
+      throw new UnauthorizedError('Invalid edit ID');
+    }
+
+    const updatedPost: Post = {
+      ...existingPost,
+      ...updates,
+      id: existingPost.id, // Never change the ID
+      timestamp: existingPost.timestamp, // Never change the timestamp
+      editId: existingPost.editId // Never change the edit ID
+    };
+
+    await this.postRepository.save(updatedPost);
+    return updatedPost;
+  }
+
+  private generatePostId(): string {
+    return Math.random().toString(36).substring(2, 15);
+  }
+
+  private generateEditId(): string {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+  }
+}
+```
+
+## Middleware
+
+### Error Handler
+```typescript
+// server/src/middleware/errorHandler.ts
+import { Request, Response, NextFunction } from 'express';
+import { ValidationError, UnauthorizedError } from '../errors/CustomErrors';
+import { ApiResponse } from '../types/ApiResponse';
+
+export const errorHandler = (
+  error: Error,
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void => {
+  console.error('Error:', error);
+
+  let statusCode = 500;
+  let message = 'Internal server error';
+
+  if (error instanceof ValidationError) {
+    statusCode = 400;
+    message = error.message;
+  } else if (error instanceof UnauthorizedError) {
+    statusCode = 403;
+    message = error.message;
+  }
+
+  const response: ApiResponse<never> = {
+    success: false,
+    error: message
+  };
+
+  res.status(statusCode).json(response);
+};
+```
+
+### Request Logger
+```typescript
+// server/src/middleware/requestLogger.ts
+import { Request, Response, NextFunction } from 'express';
+
+export const requestLogger = (req: Request, res: Response, next: NextFunction): void => {
+  const start = Date.now();
+  
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    console.log(`${req.method} ${req.path} - ${res.statusCode} - ${duration}ms`);
+  });
+  
+  next();
+};
+```
+
+### CORS Configuration
+```typescript
+// server/src/middleware/cors.ts
+import { CorsOptions } from 'cors';
+
+export const corsOptions: CorsOptions = {
+  origin: process.env.NODE_ENV === 'production' 
+    ? ['https://yourdomain.com'] 
+    : ['http://localhost:3000'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
+```
+
+## Custom Errors
+```typescript
+// server/src/errors/CustomErrors.ts
+export class ValidationError extends Error {
+  constructor(message: string, public field?: string) {
+    super(message);
+    this.name = 'ValidationError';
+  }
+}
+
+export class UnauthorizedError extends Error {
+  constructor(message: string = 'Unauthorized access') {
+    super(message);
+    this.name = 'UnauthorizedError';
+  }
+}
+
+export class NotFoundError extends Error {
+  constructor(message: string = 'Resource not found') {
+    super(message);
+    this.name = 'NotFoundError';
+  }
+}
+```
+
+## API Response Types
+```typescript
+// server/src/types/ApiResponse.ts
+export interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  field?: string;
+}
+
+export interface PaginatedResponse<T> extends ApiResponse<T[]> {
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+```
+
+## Environment Configuration
+```typescript
+// server/src/config/environment.ts
+export const config = {
+  port: process.env.PORT || 3001,
+  nodeEnv: process.env.NODE_ENV || 'development',
+  redis: {
+    host: process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.REDIS_PORT || '6379'),
+    password: process.env.REDIS_PASSWORD
+  },
+  cors: {
+    origin: process.env.CORS_ORIGIN || 'http://localhost:3000'
+  }
+};
+```
+
+## Server Startup
+```typescript
+// server/src/server.ts
+import app from './app';
+import { config } from './config/environment';
+
+const server = app.listen(config.port, () => {
+  console.log(`Server running on port ${config.port}`);
+  console.log(`Environment: ${config.nodeEnv}`);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down gracefully');
+  server.close(() => {
+    console.log('Process terminated');
+  });
+});
+
+process.on('SIGINT', () => {
+  console.log('SIGINT received, shutting down gracefully');
+  server.close(() => {
+    console.log('Process terminated');
+  });
+});
+```
+
+## Best Practices
+
+### Error Handling
+- Always use try-catch blocks in async functions
+- Create custom error classes for different error types
+- Use middleware for centralized error handling
+- Log errors appropriately
+- Return consistent error response format
+
+### Security
+- Use helmet for security headers
+- Validate all input data
+- Sanitize user input
+- Use CORS properly
+- Implement rate limiting for production
+
+### Performance
+- Use connection pooling for Redis
+- Implement proper caching strategies
+- Use compression middleware
+- Monitor memory usage
+- Implement request timeouts
+
+### Code Organization
+- Separate concerns (routes, controllers, services, repositories)
+- Use dependency injection
+- Keep functions small and focused
+- Use TypeScript strict mode
+- Write comprehensive error handling

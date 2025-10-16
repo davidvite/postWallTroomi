@@ -1,0 +1,493 @@
+---
+globs: server/**/*.ts,shared/**/*.ts
+description: Redis and data persistence patterns with mock fallback
+---
+
+# Data Persistence - Redis with Mock Fallback
+
+## Repository Pattern
+
+### Base Repository Interface
+```typescript
+// shared/types/Repository.ts
+export interface Repository<T> {
+  findById(id: string): Promise<T | null>;
+  findAll(): Promise<T[]>;
+  save(entity: T): Promise<T>;
+  delete(id: string): Promise<boolean>;
+  exists(id: string): Promise<boolean>;
+}
+
+export interface PostRepository extends Repository<Post> {
+  findByEditId(editId: string): Promise<Post | null>;
+  findRecent(limit?: number): Promise<Post[]>;
+}
+```
+
+### Redis Implementation
+```typescript
+// server/src/repositories/RedisPostRepository.ts
+import { Redis } from 'ioredis';
+import { Post, PostRepository } from '../../shared/types/Repository';
+import { ValidationError } from '../errors/CustomErrors';
+
+export class RedisPostRepository implements PostRepository {
+  private redis: Redis;
+  private readonly POST_PREFIX = 'post:';
+  private readonly POST_IDS_KEY = 'postIds';
+  private readonly EDIT_ID_INDEX = 'editId:';
+
+  constructor(redis: Redis) {
+    this.redis = redis;
+  }
+
+  async findById(id: string): Promise<Post | null> {
+    try {
+      const data = await this.redis.get(`${this.POST_PREFIX}${id}`);
+      return data ? JSON.parse(data) : null;
+    } catch (error) {
+      console.error('Redis findById error:', error);
+      throw new Error('Failed to retrieve post');
+    }
+  }
+
+  async findAll(): Promise<Post[]> {
+    try {
+      const postIds = await this.redis.lrange(this.POST_IDS_KEY, 0, -1);
+      if (postIds.length === 0) return [];
+
+      const posts: Post[] = [];
+      for (const id of postIds) {
+        const post = await this.findById(id);
+        if (post) posts.push(post);
+      }
+
+      // Sort by timestamp (most recent first)
+      return posts.sort((a, b) => b.timestamp - a.timestamp);
+    } catch (error) {
+      console.error('Redis findAll error:', error);
+      throw new Error('Failed to retrieve posts');
+    }
+  }
+
+  async save(post: Post): Promise<Post> {
+    try {
+      const pipeline = this.redis.pipeline();
+      
+      // Save the post data
+      pipeline.set(`${this.POST_PREFIX}${post.id}`, JSON.stringify(post));
+      
+      // Add to post IDs list if new
+      const exists = await this.exists(post.id);
+      if (!exists) {
+        pipeline.lpush(this.POST_IDS_KEY, post.id);
+      }
+      
+      // Update edit ID index
+      pipeline.set(`${this.EDIT_ID_INDEX}${post.editId}`, post.id);
+      
+      await pipeline.exec();
+      return post;
+    } catch (error) {
+      console.error('Redis save error:', error);
+      throw new Error('Failed to save post');
+    }
+  }
+
+  async delete(id: string): Promise<boolean> {
+    try {
+      const post = await this.findById(id);
+      if (!post) return false;
+
+      const pipeline = this.redis.pipeline();
+      pipeline.del(`${this.POST_PREFIX}${id}`);
+      pipeline.lrem(this.POST_IDS_KEY, 1, id);
+      pipeline.del(`${this.EDIT_ID_INDEX}${post.editId}`);
+      
+      await pipeline.exec();
+      return true;
+    } catch (error) {
+      console.error('Redis delete error:', error);
+      throw new Error('Failed to delete post');
+    }
+  }
+
+  async exists(id: string): Promise<boolean> {
+    try {
+      const exists = await this.redis.exists(`${this.POST_PREFIX}${id}`);
+      return exists === 1;
+    } catch (error) {
+      console.error('Redis exists error:', error);
+      return false;
+    }
+  }
+
+  async findByEditId(editId: string): Promise<Post | null> {
+    try {
+      const postId = await this.redis.get(`${this.EDIT_ID_INDEX}${editId}`);
+      if (!postId) return null;
+      
+      return await this.findById(postId);
+    } catch (error) {
+      console.error('Redis findByEditId error:', error);
+      throw new Error('Failed to find post by edit ID');
+    }
+  }
+
+  async findRecent(limit: number = 50): Promise<Post[]> {
+    try {
+      const allPosts = await this.findAll();
+      return allPosts.slice(0, limit);
+    } catch (error) {
+      console.error('Redis findRecent error:', error);
+      throw new Error('Failed to retrieve recent posts');
+    }
+  }
+}
+```
+
+### Mock Implementation (In-Memory)
+```typescript
+// server/src/repositories/MockPostRepository.ts
+import { Post, PostRepository } from '../../shared/types/Repository';
+
+export class MockPostRepository implements PostRepository {
+  private posts: Map<string, Post> = new Map();
+  private editIdIndex: Map<string, string> = new Map();
+  private postIds: string[] = [];
+
+  async findById(id: string): Promise<Post | null> {
+    return this.posts.get(id) || null;
+  }
+
+  async findAll(): Promise<Post[]> {
+    const allPosts = Array.from(this.posts.values());
+    // Sort by timestamp (most recent first)
+    return allPosts.sort((a, b) => b.timestamp - a.timestamp);
+  }
+
+  async save(post: Post): Promise<Post> {
+    const isNew = !this.posts.has(post.id);
+    
+    this.posts.set(post.id, post);
+    
+    if (isNew) {
+      this.postIds.unshift(post.id); // Add to beginning for recent first
+    }
+    
+    // Update edit ID index
+    this.editIdIndex.set(post.editId, post.id);
+    
+    return post;
+  }
+
+  async delete(id: string): Promise<boolean> {
+    const post = this.posts.get(id);
+    if (!post) return false;
+
+    this.posts.delete(id);
+    this.editIdIndex.delete(post.editId);
+    
+    const index = this.postIds.indexOf(id);
+    if (index > -1) {
+      this.postIds.splice(index, 1);
+    }
+    
+    return true;
+  }
+
+  async exists(id: string): Promise<boolean> {
+    return this.posts.has(id);
+  }
+
+  async findByEditId(editId: string): Promise<Post | null> {
+    const postId = this.editIdIndex.get(editId);
+    if (!postId) return null;
+    
+    return this.posts.get(postId) || null;
+  }
+
+  async findRecent(limit: number = 50): Promise<Post[]> {
+    const allPosts = await this.findAll();
+    return allPosts.slice(0, limit);
+  }
+
+  // Mock-specific methods for testing
+  clear(): void {
+    this.posts.clear();
+    this.editIdIndex.clear();
+    this.postIds = [];
+  }
+
+  getCount(): number {
+    return this.posts.size;
+  }
+}
+```
+
+## Redis Connection Management
+
+### Redis Client Factory
+```typescript
+// server/src/config/redis.ts
+import { Redis } from 'ioredis';
+import { config } from './environment';
+
+let redisClient: Redis | null = null;
+
+export const createRedisClient = (): Redis => {
+  if (redisClient) {
+    return redisClient;
+  }
+
+  const redisConfig = {
+    host: config.redis.host,
+    port: config.redis.port,
+    password: config.redis.password,
+    retryDelayOnFailover: 100,
+    maxRetriesPerRequest: 3,
+    lazyConnect: true,
+    keepAlive: 30000,
+  };
+
+  redisClient = new Redis(redisConfig);
+
+  redisClient.on('connect', () => {
+    console.log('Connected to Redis');
+  });
+
+  redisClient.on('error', (error) => {
+    console.error('Redis connection error:', error);
+  });
+
+  redisClient.on('close', () => {
+    console.log('Redis connection closed');
+  });
+
+  return redisClient;
+};
+
+export const getRedisClient = (): Redis => {
+  if (!redisClient) {
+    throw new Error('Redis client not initialized');
+  }
+  return redisClient;
+};
+
+export const closeRedisConnection = async (): Promise<void> => {
+  if (redisClient) {
+    await redisClient.quit();
+    redisClient = null;
+  }
+};
+```
+
+### Repository Factory
+```typescript
+// server/src/repositories/RepositoryFactory.ts
+import { PostRepository } from '../../shared/types/Repository';
+import { RedisPostRepository } from './RedisPostRepository';
+import { MockPostRepository } from './MockPostRepository';
+import { createRedisClient } from '../config/redis';
+import { config } from '../config/environment';
+
+export class RepositoryFactory {
+  private static postRepository: PostRepository | null = null;
+
+  static getPostRepository(): PostRepository {
+    if (this.postRepository) {
+      return this.postRepository;
+    }
+
+    // Use mock repository in development or if Redis is not available
+    if (config.nodeEnv === 'development' || process.env.USE_MOCK_REDIS === 'true') {
+      console.log('Using MockPostRepository');
+      this.postRepository = new MockPostRepository();
+    } else {
+      try {
+        console.log('Using RedisPostRepository');
+        const redisClient = createRedisClient();
+        this.postRepository = new RedisPostRepository(redisClient);
+      } catch (error) {
+        console.warn('Failed to connect to Redis, falling back to mock:', error);
+        this.postRepository = new MockPostRepository();
+      }
+    }
+
+    return this.postRepository;
+  }
+
+  static async initialize(): Promise<void> {
+    // Pre-initialize the repository
+    this.getPostRepository();
+  }
+
+  static async cleanup(): Promise<void> {
+    // Cleanup resources if needed
+    if (this.postRepository instanceof MockPostRepository) {
+      this.postRepository.clear();
+    }
+  }
+}
+```
+
+## Data Models and Types
+
+### Post Interface
+```typescript
+// shared/types/Post.ts
+export interface Post {
+  id: string;
+  alias: string;
+  avatar: string; // emoji or image URL
+  content: string; // max 300 characters
+  timestamp: number; // Unix timestamp
+  editId: string; // 6-digit string
+}
+
+export interface PostFormData {
+  alias: string;
+  avatar: string;
+  content: string;
+  editId?: string; // optional for new posts
+}
+
+export interface EditPostRequest {
+  id: string;
+  editId: string;
+  updates: Partial<Pick<Post, 'alias' | 'avatar' | 'content'>>;
+}
+```
+
+## Service Integration
+
+### Updated Post Service
+```typescript
+// server/src/services/PostService.ts
+import { Post, PostFormData } from '../../shared/types/Post';
+import { PostRepository } from '../../shared/types/Repository';
+import { RepositoryFactory } from '../repositories/RepositoryFactory';
+import { ValidationError, UnauthorizedError } from '../errors/CustomErrors';
+
+export class PostService {
+  private postRepository: PostRepository;
+
+  constructor() {
+    this.postRepository = RepositoryFactory.getPostRepository();
+  }
+
+  async getAllPosts(): Promise<Post[]> {
+    return await this.postRepository.findAll();
+  }
+
+  async createPost(data: PostFormData): Promise<Post> {
+    // Validate content length
+    if (data.content.length > 300) {
+      throw new ValidationError('Content must be 300 characters or less');
+    }
+
+    const post: Post = {
+      id: this.generatePostId(),
+      alias: data.alias.trim(),
+      avatar: data.avatar,
+      content: data.content.trim(),
+      timestamp: Date.now(),
+      editId: data.editId || this.generateEditId()
+    };
+
+    await this.postRepository.save(post);
+    return post;
+  }
+
+  async updatePost(id: string, editId: string, updates: Partial<Post>): Promise<Post> {
+    const existingPost = await this.postRepository.findById(id);
+    
+    if (!existingPost) {
+      throw new ValidationError('Post not found');
+    }
+
+    if (existingPost.editId !== editId) {
+      throw new UnauthorizedError('Invalid edit ID');
+    }
+
+    // Validate content length if being updated
+    if (updates.content && updates.content.length > 300) {
+      throw new ValidationError('Content must be 300 characters or less');
+    }
+
+    const updatedPost: Post = {
+      ...existingPost,
+      ...updates,
+      id: existingPost.id, // Never change the ID
+      timestamp: existingPost.timestamp, // Never change the timestamp
+      editId: existingPost.editId // Never change the edit ID
+    };
+
+    await this.postRepository.save(updatedPost);
+    return updatedPost;
+  }
+
+  async deletePost(id: string, editId: string): Promise<boolean> {
+    const existingPost = await this.postRepository.findById(id);
+    
+    if (!existingPost) {
+      throw new ValidationError('Post not found');
+    }
+
+    if (existingPost.editId !== editId) {
+      throw new UnauthorizedError('Invalid edit ID');
+    }
+
+    return await this.postRepository.delete(id);
+  }
+
+  private generatePostId(): string {
+    return Math.random().toString(36).substring(2, 15);
+  }
+
+  private generateEditId(): string {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+  }
+}
+```
+
+## Environment Configuration
+
+### Redis Configuration
+```typescript
+// server/src/config/environment.ts
+export const config = {
+  port: process.env.PORT || 3001,
+  nodeEnv: process.env.NODE_ENV || 'development',
+  redis: {
+    host: process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.REDIS_PORT || '6379'),
+    password: process.env.REDIS_PASSWORD,
+    db: parseInt(process.env.REDIS_DB || '0')
+  },
+  useMockRedis: process.env.USE_MOCK_REDIS === 'true' || process.env.NODE_ENV === 'development'
+};
+```
+
+## Best Practices
+
+### Data Persistence
+- Always use the repository pattern for data access
+- Implement both Redis and mock versions
+- Use transactions/pipelines for multi-operation updates
+- Handle connection failures gracefully
+- Implement proper error handling and logging
+
+### Performance
+- Use Redis pipelines for batch operations
+- Implement proper indexing strategies
+- Cache frequently accessed data
+- Use connection pooling
+- Monitor memory usage
+
+### Reliability
+- Implement fallback to mock repository
+- Use proper error handling
+- Implement retry logic for transient failures
+- Log all data operations
+- Validate data before persistence

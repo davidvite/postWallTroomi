@@ -1,0 +1,154 @@
+@import '../styles/variables';
+
+.postForm {
+  background: white;
+  border-radius: $border-radius-md;
+  padding: $spacing-lg;
+  margin-bottom: $spacing-lg;
+  box-shadow: $shadow-md;
+}
+
+.title {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  margin-bottom: $spacing-md;
+  color: $primary-color;
+}
+
+.successMessage {
+  background: #d1fae5;
+  color: #065f46;
+  padding: $spacing-sm $spacing-md;
+  border-radius: $border-radius-sm;
+  margin-bottom: $spacing-md;
+  border: 1px solid #a7f3d0;
+}
+
+.field {
+  margin-bottom: $spacing-md;
+}
+
+.label {
+  display: block;
+  font-weight: $font-weight-medium;
+  margin-bottom: $spacing-xs;
+  color: #374151;
+}
+
+.input, .textarea {
+  width: 100%;
+  padding: $spacing-sm $spacing-md;
+  border: 1px solid #d1d5db;
+  border-radius: $border-radius-sm;
+  font-size: $font-size-base;
+  transition: border-color 0.2s, box-shadow 0.2s;
+
+  &:focus {
+    outline: none;
+    border-color: $primary-color;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  }
+
+  &.error {
+    border-color: $error-color;
+  }
+
+  &:disabled {
+    background: #f9fafb;
+    cursor: not-allowed;
+  }
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 100px;
+  font-family: inherit;
+}
+
+.avatarGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+  gap: $spacing-xs;
+  max-width: 400px;
+}
+
+.avatarOption {
+  width: 40px;
+  height: 40px;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background: #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: #e2e8f0;
+  }
+
+  &.selected {
+    border-color: $primary-color;
+    background: #dbeafe;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+}
+
+.characterCounter {
+  text-align: right;
+  margin-top: $spacing-xs;
+  font-size: $font-size-sm;
+  color: $secondary-color;
+
+  .overLimit {
+    color: $error-color;
+    font-weight: $font-weight-medium;
+  }
+}
+
+.helpText {
+  display: block;
+  margin-top: $spacing-xs;
+  font-size: $font-size-sm;
+  color: $secondary-color;
+}
+
+.errorMessage {
+  display: block;
+  margin-top: $spacing-xs;
+  font-size: $font-size-sm;
+  color: $error-color;
+}
+
+.submitButton {
+  background: $primary-color;
+  color: white;
+  border: none;
+  border-radius: $border-radius-sm;
+  padding: $spacing-sm $spacing-lg;
+  font-size: $font-size-base;
+  font-weight: $font-weight-medium;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  width: 100%;
+
+  &:hover:not(:disabled) {
+    background: darken($primary-color, 10%);
+  }
+
+  &:disabled {
+    background: $secondary-color;
+    cursor: not-allowed;
+  }
+
+  &:focus {
+    outline: 2px solid $primary-color;
+    outline-offset: 2px;
+  }
+}

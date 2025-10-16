@@ -1,0 +1,10 @@
+// Main SCSS file
+@import 'variables';
+@import 'base';
+@import 'components';
+
+.app {
+  min-height: 100vh;
+  background: #f8fafc;
+  font-family: $font-family-base;
+}

@@ -1,0 +1,223 @@
+@import '../styles/variables';
+
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: $spacing-md;
+}
+
+.modalContent {
+  background: white;
+  border-radius: $border-radius-md;
+  max-width: 500px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: $shadow-lg;
+}
+
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: $spacing-lg $spacing-lg $spacing-md;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.modalTitle {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  margin: 0;
+  color: $primary-color;
+}
+
+.closeButton {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: $secondary-color;
+  padding: $spacing-xs;
+  border-radius: $border-radius-sm;
+  transition: all 0.2s ease;
+
+  &:hover {
+    color: $primary-color;
+    background: #f1f5f9;
+  }
+
+  &:focus {
+    outline: 2px solid $primary-color;
+    outline-offset: 2px;
+  }
+}
+
+.editForm {
+  padding: $spacing-lg;
+}
+
+.field {
+  margin-bottom: $spacing-md;
+}
+
+.label {
+  display: block;
+  font-weight: $font-weight-medium;
+  margin-bottom: $spacing-xs;
+  color: #374151;
+}
+
+.input, .textarea {
+  width: 100%;
+  padding: $spacing-sm $spacing-md;
+  border: 1px solid #d1d5db;
+  border-radius: $border-radius-sm;
+  font-size: $font-size-base;
+  transition: border-color 0.2s, box-shadow 0.2s;
+
+  &:focus {
+    outline: none;
+    border-color: $primary-color;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  }
+
+  &.error {
+    border-color: $error-color;
+  }
+
+  &:disabled {
+    background: #f9fafb;
+    cursor: not-allowed;
+  }
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 100px;
+  font-family: inherit;
+}
+
+.characterCounter {
+  text-align: right;
+  margin-top: $spacing-xs;
+  font-size: $font-size-sm;
+  color: $secondary-color;
+
+  .overLimit {
+    color: $error-color;
+    font-weight: $font-weight-medium;
+  }
+}
+
+.helpText {
+  display: block;
+  margin-top: $spacing-xs;
+  font-size: $font-size-sm;
+  color: $secondary-color;
+}
+
+.avatarGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+  gap: $spacing-xs;
+  margin-top: $spacing-xs;
+}
+
+.avatarOption {
+  width: 40px;
+  height: 40px;
+  border: 2px solid #e2e8f0;
+  border-radius: $border-radius-sm;
+  background: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  transition: all 0.2s ease;
+
+  &:hover:not(:disabled) {
+    border-color: $primary-color;
+    background: #f8fafc;
+  }
+
+  &:focus {
+    outline: 2px solid $primary-color;
+    outline-offset: 2px;
+  }
+
+  &.selected {
+    border-color: $primary-color;
+    background: rgba(37, 99, 235, 0.1);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.errorMessage {
+  background: #fef2f2;
+  color: #dc2626;
+  padding: $spacing-sm $spacing-md;
+  border-radius: $border-radius-sm;
+  margin-bottom: $spacing-md;
+  border: 1px solid #fecaca;
+  font-size: $font-size-sm;
+}
+
+.modalActions {
+  display: flex;
+  gap: $spacing-sm;
+  justify-content: flex-end;
+  margin-top: $spacing-lg;
+  padding-top: $spacing-md;
+  border-top: 1px solid #e2e8f0;
+}
+
+.cancelButton, .saveButton {
+  padding: $spacing-sm $spacing-md;
+  border: none;
+  border-radius: $border-radius-sm;
+  font-size: $font-size-base;
+  font-weight: $font-weight-medium;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  &:focus {
+    outline: 2px solid $primary-color;
+    outline-offset: 2px;
+  }
+}
+
+.cancelButton {
+  background: $secondary-color;
+  color: white;
+
+  &:hover:not(:disabled) {
+    background: darken($secondary-color, 10%);
+  }
+}
+
+.saveButton {
+  background: $primary-color;
+  color: white;
+
+  &:hover:not(:disabled) {
+    background: darken($primary-color, 10%);
+  }
+}
