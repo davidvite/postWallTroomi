@@ -59,7 +59,7 @@ export const PostForm: React.FC<PostFormProps> = ({ onSubmit, isSubmitting }) =>
   const { showToast } = useToast();
   const [formData, setFormData] = useState<PostFormData>({
     alias: '',
-    avatar: AVATAR_OPTIONS[0],
+    avatar: AVATAR_OPTIONS[0] || '🏂',
     content: '',
     editId: ''
   });
@@ -114,7 +114,7 @@ export const PostForm: React.FC<PostFormProps> = ({ onSubmit, isSubmitting }) =>
       // Reset form
       setFormData({
         alias: '',
-        avatar: AVATAR_OPTIONS[0],
+        avatar: AVATAR_OPTIONS[0] || '🏂',
         content: '',
         editId: ''
       });
