@@ -20,6 +20,9 @@
     "type-check": "pnpm --filter shared type-check && pnpm --filter server type-check && pnpm --filter client type-check",
     "clean": "pnpm --filter shared clean && pnpm --filter server clean && pnpm --filter client clean"
   },
+  "dependencies": {
+    "nanoid": "^5.1.6"
+  },
   "devDependencies": {
     "@types/node": "^20.10.0",
     "concurrently": "^8.2.2",
