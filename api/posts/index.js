@@ -1,5 +1,4 @@
 // Vercel serverless function for posts API
-const { nanoid } = require('nanoid');
 
 // In-memory store for posts (in production, you'd use a database)
 let posts = [];
@@ -8,7 +7,7 @@ let postIds = [];
 // Initialize with default post if empty
 if (posts.length === 0) {
   const defaultPost = {
-    id: nanoid(),
+    id: 'default-' + Math.random().toString(36).substr(2, 9),
     alias: 'MexicanSnowboarder',
     avatar: '🏂',
     content: 'Just hit the slopes! Fresh powder today! 🏔️',
@@ -26,7 +25,7 @@ function generateEditId() {
 
 // Helper function to generate post ID
 function generatePostId() {
-  return nanoid();
+  return Math.random().toString(36).substr(2, 9);
 }
 
 // Validation functions
