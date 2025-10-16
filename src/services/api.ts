@@ -17,10 +17,13 @@ const getApiBaseUrl = (): string => {
     return import.meta.env.VITE_API_URL;
   }
   
-  // Check if we're on Vercel (production) by hostname
-  if (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')) {
-    console.log('✅ Detected Vercel deployment, using /api');
-    return '/api';
+  // Check if we're on Vercel (production) by hostname - this is the most reliable method
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    if (hostname.includes('vercel.app') || hostname.includes('vercel.com')) {
+      console.log('✅ Detected Vercel deployment, using /api');
+      return '/api';
+    }
   }
   
   // In production mode, use relative path to API
