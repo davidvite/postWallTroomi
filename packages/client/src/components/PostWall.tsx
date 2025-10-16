@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { Post, PostFormData } from '@post-wall/shared';
+import { Post, PostFormData } from '../types';
 import { usePosts } from '../hooks/usePosts';
 import { PostCard } from './PostCard';
 import { PostForm } from './PostForm';

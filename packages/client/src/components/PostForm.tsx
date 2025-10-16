@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { PostFormData, Post } from '@post-wall/shared';
+import { PostFormData, Post } from '../types';
 import { useToast } from '../contexts/ToastContext';
 import styles from './PostForm.module.scss';
 

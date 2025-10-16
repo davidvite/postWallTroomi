@@ -1,5 +1,5 @@
 import React from 'react';
-import { Post } from '@post-wall/shared';
+import { Post } from '../types';
 import { formatRelativeTime } from '../utils/relativeTime';
 import styles from './PostCard.module.scss';
 

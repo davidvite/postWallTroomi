@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Post } from '@post-wall/shared';
+import { Post } from '../types';
 import { useToast } from '../contexts/ToastContext';
 import styles from './EditModal.module.scss';
 

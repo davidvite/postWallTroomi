@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Post, PostFormData } from '@post-wall/shared';
+import { Post, PostFormData } from '../types';
 import { apiClient } from '../services/api';
 
 interface UsePostsReturn {

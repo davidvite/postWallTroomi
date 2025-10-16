@@ -1,4 +1,4 @@
-import { Post, PostFormData, ApiResponse } from '@post-wall/shared';
+import { Post, PostFormData, ApiResponse } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:4000/api');
 
